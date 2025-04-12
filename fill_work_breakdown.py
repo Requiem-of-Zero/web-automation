@@ -63,12 +63,15 @@ def parse_args():
     parser.add_argument("--ldap", required=True, help="LDAP of user filling form")
     return parser.parse_args()
 
+
 def fill_google_form(date, groups):
     print("🟢 Starting clean session with saved login...")
 
     chrome_path = get_chrome_path()
     auth_path = get_auth_path()
+    # --repair {time}
     repair_time = groups["repair"]
+    # --deploy {time}
     deploy_time = groups["deploy"]
     project_time = groups["project"]
     decom_time = groups["decom"]
