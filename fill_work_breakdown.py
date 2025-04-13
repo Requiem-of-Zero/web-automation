@@ -4,9 +4,10 @@ from playwright.sync_api import sync_playwright
 import platform
 import argparse
 
+# Get the path to the installed Chrome browser based on the OS
 def get_chrome_path():
     system = platform.system()
-    if system == "Darwin":
+    if system == "Darwin":  # macOS
         return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     elif system == "Windows":
         return "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
@@ -15,54 +16,11 @@ def get_chrome_path():
     else:
         raise RuntimeError("Unsupported OS")
 
+# Get the directory path where the browser profile is stored (for saved login sessions)
 def get_profile_path():
     return Path.home() / ".chrome-playwright-profile"
 
-def get_auth_path():
-    return Path.home() / ".config" / "playwright" / "auth.json"
-
-def save_auth_with_persistent_context():
-    print("🔐 Launching persistent browser for login...")
-    chrome_path = get_chrome_path()
-    profile_path = get_profile_path()
-    profile_path.mkdir(parents=True, exist_ok=True)
-
-    with sync_playwright() as p:
-        # STEP 1: Launch with persistent context
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=str(profile_path),
-            executable_path=chrome_path,
-            headless=False,
-            slow_mo=300,
-            args=["--disable-blink-features=AutomationControlled"]
-        )
-
-        page = context.new_page()
-        page.goto("https://accounts.google.com/")
-
-        print("📝 Sign in manually in the browser.")
-        input("⏸️  After sign-in, press [Enter] to continue...")
-
-        print("🌐 Going to form to verify session...")
-        page.goto("https://docs.google.com/forms/d/e/1FAIpQLSfmkdQ5mYRyKZpHUtJTGOWOS7jarU-4h5n9w-PxxscoE3AltQ/viewform")
-        input("✅ When the form is loaded and you're signed in, press [Enter] to save auth...")
-
-        context.close()
-
-        # STEP 2: Launch clean context from persistent profile and save auth
-        browser = p.chromium.launch(
-            executable_path=chrome_path,
-            headless=True  # no need to show UI
-        )
-        clean_context = browser.new_context(
-            user_data_dir=str(profile_path)
-        )
-        clean_context.storage_state(path=get_auth_path())
-        print(f"✅ Auth state saved to: {get_auth_path()}")
-        clean_context.close()
-        browser.close()
-
-
+# Parse command-line arguments to get form data
 def parse_args():
     parser = argparse.ArgumentParser(description="Submit work breakdown to Google Form.")
     parser.add_argument("--date", required=True, help="Date to fill in the form (YYYY-MM-DD)")
@@ -75,63 +33,48 @@ def parse_args():
     parser.add_argument("--ldap", default="samwo", help="LDAP of user filling form")
     return parser.parse_args()
 
-
+# Launch a persistent browser and fill out the Google Form using Playwright
 def fill_google_form(date, groups):
-    print("🟢 Starting clean session with saved login...")
+    print("🟢 Starting clean session with persistent login...")
 
     chrome_path = get_chrome_path()
-    auth_path = get_auth_path()
-    # --repair {time}
-    repair_time = groups["repair"]
-    # --deploy {time}
-    deploy_time = groups["deploy"]
-    # --project {time}
-    project_time = groups["project"]
-    # --decom {time}
-    decom_time = groups["decom"]
-    # --admin {time}
-    admin_time = groups["admin"]
-    # --ooo {time}
-    ooo_time = groups["ooo"]
+    profile_path = get_profile_path()
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            executable_path=chrome_path,
-            headless=False,
-            # Disable google security sign in page security feature during automation
-            args=["--disable-blink-features=AutomationControlled"]
+        # Launch Chrome with a persistent context to preserve login session
+        context = p.chromium.launch_persistent_context(
+            user_data_dir=str(profile_path),       # Uses saved Chrome profile (keeps login session)
+            executable_path=chrome_path,           # Use full Chrome, not bundled Chromium
+            headless=False,                        # Show the browser window
+            slow_mo=100,                           # Slow down each step for visibility/debugging, throttle control to ensure automation accuracy
+            args=["--disable-blink-features=AutomationControlled"]  # Helps bypass bot detection
         )
-        context = browser.new_context(storage_state=str(auth_path))
-        page = context.new_page()
 
+        # Open a new page in the browser
+        page = context.new_page()
         print("🔗 Navigating to the Google Form...")
         page.goto("https://docs.google.com/forms/d/e/1FAIpQLSfmkdQ5mYRyKZpHUtJTGOWOS7jarU-4h5n9w-PxxscoE3AltQ/viewform")
-        page.get_by_role("textbox", name="Date").click()
-        page.get_by_role("textbox", name="Date").fill(date)
-        page.locator(".e2CuFe").click()
-        page.get_by_role("option", name=groups["ldap"]).locator("span").click()
-        page.get_by_role("group", name="Repairs").get_by_label("Hours").click()
-        page.get_by_role("group", name="Repairs").get_by_label("Hours").fill(repair_time)
-        page.get_by_role("group", name="Deployments").get_by_label("Hours").click()
-        page.get_by_role("group", name="Deployments").get_by_label("Hours").fill(deploy_time)
-        page.get_by_role("group", name="Projects").get_by_label("Hours").click()
-        page.get_by_role("group", name="Projects").get_by_label("Hours").fill(project_time)
-        page.get_by_role("group", name="Decomms").get_by_label("Hours").click()
-        page.get_by_role("group", name="Decomms").get_by_label("Hours").fill(decom_time)
-        page.get_by_role("group", name="Administrative").get_by_label("Hours").click()
-        page.get_by_role("group", name="Administrative").get_by_label("Hours").fill(admin_time)
-        page.get_by_role("group", name="OOO Time").get_by_label("Hours").click()
-        page.get_by_role("group", name="OOO Time").get_by_label("Hours").fill(ooo_time)
-        page.pause()
-        page.get_by_role("textbox", name="Date").fill(date)
-        # Your form-filling logic...
-        # (Don't use page.get_by_role(..., name=...) unless you've confirmed the labels)
 
-        context.close()
-        browser.close()
+        # Fill in the form fields using roles and labels
+        page.get_by_role("textbox", name="Date").fill(date)                                # Fill date field
+        page.locator(".e2CuFe").click()                                                    # Click the LDAP dropdown
+        page.get_by_role("option", name=groups["ldap"]).locator("span").click()            # Select the user's name
+        page.get_by_role("group", name="Repairs").get_by_label("Hours").fill(groups["repair"])         # Repair hours
+        page.get_by_role("group", name="Deployments").get_by_label("Hours").fill(groups["deploy"])     # Deployment hours
+        page.get_by_role("group", name="Projects").get_by_label("Hours").fill(groups["project"])       # Project hours
+        page.get_by_role("group", name="Decomms").get_by_label("Hours").fill(groups["decom"])          # Decommission hours
+        page.get_by_role("group", name="Administrative").get_by_label("Hours").fill(groups["admin"])   # Admin hours
+        page.get_by_role("group", name="OOO Time").get_by_label("Hours").fill(groups["ooo"])           # Out of Office hours
 
+        page.pause()  # Pause the browser so you can inspect or submit manually if needed
+
+        context.close()  # Close the browser when done
+
+# Entry point when the script is run from the command line
 if __name__ == "__main__":
     args = parse_args()
+    
+    # Organize group hours into a dictionary for easier access
     groups = {
         "repair": args.repair,
         "deploy": args.deploy,
@@ -142,8 +85,5 @@ if __name__ == "__main__":
         "ldap": args.ldap
     }
 
-    if not get_auth_path().exists():
-        save_auth_with_persistent_context()
-        print("🔁 Auth saved. Re-run the script to submit the form.")
-    else:
-        fill_google_form(args.date, groups)
+    # Run the form-filling automation
+    fill_google_form(args.date, groups)
