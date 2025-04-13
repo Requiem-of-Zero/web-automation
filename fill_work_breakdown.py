@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 import platform
@@ -100,7 +99,7 @@ if __name__ == "__main__":
         print(f"Decommission time: {args.decom}")
         print(f"Administrative time: {args.admin}")
         print(f"OOO time: {args.ooo}")
-        print(f"Please update default values in the parse arguments if what is set isn't what you prefer")
+        print(f"Please update default values in the parse arguments if what is set isn't what you prefer.")
         exit(1)
 
     # Run the form-filling automation
