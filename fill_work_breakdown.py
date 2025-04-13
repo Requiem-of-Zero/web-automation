@@ -28,6 +28,7 @@ def save_auth_with_persistent_context():
     profile_path.mkdir(parents=True, exist_ok=True)
 
     with sync_playwright() as p:
+        # STEP 1: Launch with persistent context
         context = p.chromium.launch_persistent_context(
             user_data_dir=str(profile_path),
             executable_path=chrome_path,
@@ -44,23 +45,34 @@ def save_auth_with_persistent_context():
 
         print("🌐 Going to form to verify session...")
         page.goto("https://docs.google.com/forms/d/e/1FAIpQLSfmkdQ5mYRyKZpHUtJTGOWOS7jarU-4h5n9w-PxxscoE3AltQ/viewform")
+        input("✅ When the form is loaded and you're signed in, press [Enter] to save auth...")
 
-        # Save session
-        context.storage_state(path=get_auth_path())
-        print(f"✅ Auth state saved to: {get_auth_path()}")
         context.close()
+
+        # STEP 2: Launch clean context from persistent profile and save auth
+        browser = p.chromium.launch(
+            executable_path=chrome_path,
+            headless=True  # no need to show UI
+        )
+        clean_context = browser.new_context(
+            user_data_dir=str(profile_path)
+        )
+        clean_context.storage_state(path=get_auth_path())
+        print(f"✅ Auth state saved to: {get_auth_path()}")
+        clean_context.close()
+        browser.close()
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Submit work breakdown to Google Form.")
-    parser.add_argument("--date", required=True, help="Date to fill in the form (MM-DD-YYYY or YYYY-MM-DD)")
-    parser.add_argument("--repair", default="0", help="Repair hours")
+    parser.add_argument("--date", required=True, help="Date to fill in the form (YYYY-MM-DD)")
+    parser.add_argument("--repair", default="2", help="Repair hours")
     parser.add_argument("--deploy", default="0", help="Deployment hours")
-    parser.add_argument("--project", default="0", help="Project hours")
+    parser.add_argument("--project", default="2", help="Project hours")
     parser.add_argument("--decom", default="0", help="Decommission hours")
-    parser.add_argument("--admin", default="0", help="Admin hours")
+    parser.add_argument("--admin", default="4", help="Admin hours")
     parser.add_argument("--ooo", default="0", help="Out of Office hours")
-    parser.add_argument("--ldap", required=True, help="LDAP of user filling form")
+    parser.add_argument("--ldap", default="samwo", help="LDAP of user filling form")
     return parser.parse_args()
 
 
@@ -73,15 +85,20 @@ def fill_google_form(date, groups):
     repair_time = groups["repair"]
     # --deploy {time}
     deploy_time = groups["deploy"]
+    # --project {time}
     project_time = groups["project"]
+    # --decom {time}
     decom_time = groups["decom"]
+    # --admin {time}
     admin_time = groups["admin"]
+    # --ooo {time}
     ooo_time = groups["ooo"]
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
             executable_path=chrome_path,
             headless=False,
+            # Disable google security sign in page security feature during automation
             args=["--disable-blink-features=AutomationControlled"]
         )
         context = browser.new_context(storage_state=str(auth_path))
