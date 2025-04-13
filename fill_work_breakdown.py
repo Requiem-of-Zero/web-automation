@@ -100,6 +100,7 @@ if __name__ == "__main__":
         print(f"Decommission time: {args.decom}")
         print(f"Administrative time: {args.admin}")
         print(f"OOO time: {args.ooo}")
+        print(f"Please update default values in the parse arguments if what is set isn't what you prefer")
         exit(1)
 
     # Run the form-filling automation
