@@ -65,9 +65,9 @@ def fill_google_form(date, groups):
         page.get_by_role("group", name="Decomms").get_by_label("Hours").fill(groups["decom"])          # Decommission hours
         page.get_by_role("group", name="Administrative").get_by_label("Hours").fill(groups["admin"])   # Admin hours
         page.get_by_role("group", name="OOO Time").get_by_label("Hours").fill(groups["ooo"])           # Out of Office hours
+        page.pause()  # Pause the browser so you can inspect or submit manually if needed. Comment this line out to enable automation to get to submission
 
-        page.pause()  # Pause the browser so you can inspect or submit manually if needed
-
+        # page.get_by_role("button", name="Submit").click() uncomment this line to enable submission
         context.close()  # Close the browser when done
 
 # Entry point when the script is run from the command line
@@ -84,6 +84,23 @@ if __name__ == "__main__":
         "ooo": args.ooo,
         "ldap": args.ldap
     }
+
+    # ✅ Validate total hours add up to exactly 8
+    try:
+        total_hours = sum(float(groups[key]) for key in ["repair", "deploy", "project", "decom", "admin", "ooo"])
+    except ValueError:
+        print("❌ Error: One or more hour inputs are not valid numbers.")
+        exit(1)
+
+    if total_hours != 8:
+        print(f"❌ Error: Total hours must equal 8. You entered: {total_hours}")
+        print(f"Repair time: {args.repair}")
+        print(f"Deployment time: {args.deploy}")
+        print(f"Project time: {args.project}")
+        print(f"Decommission time: {args.decom}")
+        print(f"Administrative time: {args.admin}")
+        print(f"OOO time: {args.ooo}")
+        exit(1)
 
     # Run the form-filling automation
     fill_google_form(args.date, groups)
